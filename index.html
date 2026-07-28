@@ -27,6 +27,9 @@
   #reader{width:100%;border-radius:.5rem;overflow:hidden}
   #reader video{border-radius:.5rem}
   .startbtn{width:100%;background:#2563eb;color:#fff;border:none;padding:.9rem;border-radius:.375rem;font-weight:700;font-size:1rem;margin-bottom:.75rem}
+  .zoomwrap{margin-top:.6rem}
+  .zoomwrap label{color:#9ca3af;font-size:.7rem;display:block;margin-bottom:.2rem}
+  .zoomwrap input{width:100%}
   .field-now{background:#374151;padding:.85rem;border-radius:.375rem;margin:.75rem 0;text-align:center}
   .field-now .lbl{font-size:.7rem;color:#9ca3af}
   .field-now .val{font-size:1.3rem;font-weight:700;margin:.15rem 0}
@@ -71,6 +74,10 @@
     <h2>Camera Scanner</h2>
     <button class="startbtn" id="startBtn">▶ Start Camera</button>
     <div id="reader"></div>
+    <div class="zoomwrap" id="zoomWrap" style="display:none">
+      <label>Zoom</label>
+      <input type="range" id="zoom">
+    </div>
     <div class="field-now">
       <div class="lbl">Scanning into</div>
       <div class="val" id="fieldNow">Meter ID</div>
@@ -200,12 +207,26 @@ function fillScan(text){
 
 async function startCam(){
   const btn=document.getElementById('startBtn');
-  if(scanning){await qr.stop();scanning=false;btn.textContent='▶ Start Camera';return;}
+  if(scanning){await qr.stop();scanning=false;btn.textContent='▶ Start Camera';document.getElementById('zoomWrap').style.display='none';return;}
   if(typeof Html5Qrcode==='undefined'){toast('Scanner lib not loaded');return;}
   qr=qr||new Html5Qrcode('reader');
   try{
-    await qr.start({facingMode:'environment'},{fps:10,qrbox:{width:250,height:150}},d=>fillScan(d.trim()));
+    await qr.start(
+      {facingMode:'environment'},
+      {fps:10,qrbox:{width:300,height:170},videoConstraints:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}},
+      d=>fillScan(d.trim())
+    );
     scanning=true;btn.textContent='⏸ Stop Camera';
+    try{
+      const caps=qr.getRunningTrackCapabilities();
+      if(caps&&caps.zoom){
+        const w=document.getElementById('zoomWrap'),s=document.getElementById('zoom');
+        s.min=caps.zoom.min;s.max=caps.zoom.max;s.step=caps.zoom.step||0.1;
+        s.value=(qr.getRunningTrackSettings().zoom)||caps.zoom.min;
+        w.style.display='block';
+        s.oninput=()=>qr.applyVideoConstraints({advanced:[{zoom:parseFloat(s.value)}]});
+      }
+    }catch(e){}
   }catch(e){toast('Camera blocked — needs https + permission')}
 }
 
