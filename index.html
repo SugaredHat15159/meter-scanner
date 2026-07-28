@@ -172,7 +172,7 @@ function renderTable(){
   const tb=document.getElementById('tbody');tb.innerHTML='';
   rooms[room].forEach((r,i)=>{const tr=document.createElement('tr');if(i===pos)tr.className='cur';
     tr.innerHTML=`<td>${r.position||'—'}</td><td>${r.fluxId||'—'}</td><td>${r.meterId||'—'}</td><td>${r.other||'—'}</td><td class="del">✕</td>`;
-    tr.querySelector('.del').onclick=e=>{e.stopPropagation();rooms[room][i]=blank();save();render()};
+    tr.querySelector('.del').onclick=e=>{e.stopPropagation();if(rooms[room].length>1){rooms[room].splice(i,1);if(pos>=rooms[room].length)pos=rooms[room].length-1;}else{rooms[room][0]=blank();}save();render()};
     tr.onclick=e=>{if(!e.target.classList.contains('del')){pos=i;render()}};
     tb.appendChild(tr)});
 }
