@@ -94,6 +94,7 @@
     <div class="rowbtns">
       <button class="clr" id="clrCur">🗑 Clear Position</button>
       <button class="addpos" id="addPos">＋ Add Position</button>
+      <button class="addpos" id="subPos">－ Remove Position</button>
     </div>
   </div>
 
@@ -235,6 +236,7 @@ document.getElementById('prev').onclick=()=>{if(pos>0){pos--;render()}};
 document.getElementById('next').onclick=()=>{if(pos<rooms[room].length-1){pos++;render()}};
 document.getElementById('clrCur').onclick=()=>{rooms[room][pos]=blank();save();render()};
 document.getElementById('addPos').onclick=()=>{rooms[room].push(blank());pos=rooms[room].length-1;save();render()};
+document.getElementById('subPos').onclick=()=>{if(rooms[room].length>1){rooms[room].splice(pos,1);if(pos>=rooms[room].length)pos=rooms[room].length-1;save();render()}else{toast('Need at least one position')}};
 document.getElementById('expBtn').onclick=exportXlsx;
 
 load();render();
