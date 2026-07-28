@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Meter Scanner</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#111827;color:#fff}
+  .wrap{max-width:640px;margin:0 auto;padding:1rem;padding-bottom:170px}
+  h1{font-size:1.35rem;margin-bottom:.75rem}
+  .tabs{display:flex;gap:.5rem;overflow-x:auto;padding-bottom:.5rem;margin-bottom:.5rem}
+  .tab{padding:.5rem 1rem;border-radius:.375rem;font-weight:600;white-space:nowrap;border:none;font-size:.85rem}
+  .tab.on{background:#2563eb;color:#fff}
+  .tab.off{background:#374151;color:#d1d5db}
+  .rin{padding:.5rem;border-radius:.375rem;background:#374151;color:#fff;border:none;font-size:.85rem;min-width:110px}
+  .radd{padding:.5rem .8rem;background:#16a34a;color:#fff;border:none;border-radius:.375rem;font-weight:600}
+  .manage{display:flex;gap:.5rem;margin-bottom:1rem}
+  .mbtn{flex:1;padding:.5rem;border:none;border-radius:.375rem;font-size:.78rem;font-weight:600;color:#fff}
+  .mbtn.rename{background:#4b5563}
+  .mbtn.delete{background:#7f1d1d}
+  .card{background:#1f2937;border-radius:.5rem;padding:1rem;margin-bottom:1rem;border:2px solid #374151}
+  .card.hl{border-color:#3b82f6}
+  .card h2{font-size:1rem;margin-bottom:.75rem}
+  #reader{width:100%;border-radius:.5rem;overflow:hidden}
+  #reader video{border-radius:.5rem}
+  .startbtn{width:100%;background:#2563eb;color:#fff;border:none;padding:.9rem;border-radius:.375rem;font-weight:700;font-size:1rem;margin-bottom:.75rem}
+  .field-now{background:#374151;padding:.85rem;border-radius:.375rem;margin:.75rem 0;text-align:center}
+  .field-now .lbl{font-size:.7rem;color:#9ca3af}
+  .field-now .val{font-size:1.3rem;font-weight:700;margin:.15rem 0}
+  .fieldrow{display:flex;gap:.4rem;margin-bottom:.75rem}
+  .fbtn{flex:1;padding:.5rem;border:2px solid #4b5563;background:#374151;color:#cbd5e1;border-radius:.375rem;font-size:.72rem;font-weight:600}
+  .fbtn.sel{border-color:#22c55e;color:#fff;background:#1e3a2f}
+  .nav{display:flex;align-items:center;justify-content:space-between;background:#374151;padding:.6rem;border-radius:.375rem}
+  .nbtn{background:#2563eb;color:#fff;border:none;width:44px;height:44px;border-radius:.375rem;font-size:1.1rem}
+  .nbtn:disabled{opacity:.4}
+  .ninfo{text-align:center}.ninfo .p{font-weight:700}.ninfo .r{font-size:.7rem;color:#9ca3af}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.75rem}
+  .df{padding:.6rem;border-radius:.375rem;background:#374151;border:2px solid #4b5563}
+  .df.meter{border-color:#3b82f6}.df.flux{border-color:#a855f7}.df.pos{border-color:#22c55e}.df.other{border-color:#6b7280}
+  .df .lbl{font-size:.68rem;color:#9ca3af;display:block;margin-bottom:.2rem}
+  .df .v{font-weight:700;min-height:22px;padding:.15rem;border-radius:.25rem}
+  .df input{width:100%;background:#4b5563;color:#fff;border:none;border-radius:.25rem;padding:.3rem;font-weight:700;font-size:.9rem}
+  .rowbtns{display:flex;gap:.5rem;margin-top:.5rem}
+  .clr{flex:1;background:#dc2626;color:#fff;border:none;padding:.65rem;border-radius:.375rem;font-weight:700}
+  .addpos{flex:1;background:#374151;color:#fff;border:none;padding:.65rem;border-radius:.375rem;font-weight:700}
+  table{width:100%;border-collapse:collapse;font-size:.72rem}
+  th{background:#374151;padding:.45rem;text-align:left;border:1px solid #4b5563}
+  td{padding:.45rem;border:1px solid #4b5563;word-break:break-word}
+  tr.cur{background:#1e3a8a}
+  .del{text-align:center;color:#ef4444;font-weight:700}
+  .foot{position:fixed;bottom:0;left:0;right:0;background:#111827;border-top:2px solid #374151;padding:.85rem}
+  .foot .in{max-width:640px;margin:0 auto}
+  .exp{width:100%;background:#16a34a;color:#fff;border:none;padding:.9rem;border-radius:.375rem;font-weight:700;font-size:1rem}
+  .hint{font-size:.7rem;color:#9ca3af;text-align:center;margin-top:.4rem}
+  .toast{position:fixed;top:1rem;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:.6rem 1rem;border-radius:.375rem;font-weight:600;z-index:999;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📱 Meter Scanner</h1>
+  <div class="tabs" id="tabs"></div>
+  <div class="manage">
+    <button class="mbtn rename" id="renameBtn">✎ Rename Room</button>
+    <button class="mbtn delete" id="deleteBtn">🗑 Delete Room</button>
+  </div>
+
+  <div class="card hl">
+    <h2>Camera Scanner</h2>
+    <button class="startbtn" id="startBtn">▶ Start Camera</button>
+    <div id="reader"></div>
+    <div class="field-now">
+      <div class="lbl">Scanning into</div>
+      <div class="val" id="fieldNow">Meter ID</div>
+    </div>
+    <div class="fieldrow" id="fieldRow"></div>
+    <div class="nav">
+      <button class="nbtn" id="prev">◀</button>
+      <div class="ninfo"><div class="p" id="posInfo">Position 1 of 10</div><div class="r" id="roomInfo">Room One</div></div>
+      <button class="nbtn" id="next">▶</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 id="posTitle">Position 1</h2>
+    <div class="grid">
+      <div class="df meter" id="fMeter"></div>
+      <div class="df flux" id="fFlux"></div>
+      <div class="df pos" id="fPos"></div>
+      <div class="df other" id="fOther"></div>
+    </div>
+    <div class="rowbtns">
+      <button class="clr" id="clrCur">🗑 Clear Position</button>
+      <button class="addpos" id="addPos">＋ Add Position</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 id="tblTitle">Room One</h2>
+    <div style="overflow-x:auto">
+      <table><thead><tr><th>Position</th><th>Flux ID</th><th>Meter ID</th><th>Other</th><th></th></tr></thead>
+      <tbody id="tbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<div class="foot"><div class="in">
+  <button class="exp" id="expBtn">⬇ Export to Excel</button>
+  <div class="hint">Downloads a file you can email or share</div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const FIELDS=[['meterId','Meter ID'],['fluxId','Flux ID'],['position','Position'],['other','Other']];
+const blank=()=>({position:'',fluxId:'',meterId:'',other:''});
+let rooms={'Room One':Array(10).fill(0).map(blank)};
+let order=['Room One'];
+let room='Room One',pos=0,activeField='meterId',editing=null,qr=null,scanning=false,lastScan={t:0,v:''};
+
+function load(){try{const s=localStorage.getItem('meterInv3');if(s){const o=JSON.parse(s);rooms=o.rooms;order=o.order||Object.keys(rooms);room=order[0];}}catch(e){}}
+function save(){try{localStorage.setItem('meterInv3',JSON.stringify({rooms,order}))}catch(e){}}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',1500)}
+
+function renderTabs(){
+  const c=document.getElementById('tabs');c.innerHTML='';
+  order.forEach(r=>{const b=document.createElement('button');b.className='tab '+(r===room?'on':'off');b.textContent=r;b.onclick=()=>{room=r;pos=0;render()};c.appendChild(b)});
+  const i=document.createElement('input');i.className='rin';i.placeholder='New room…';i.id='newRoom';
+  i.onkeydown=e=>{if(e.key==='Enter')addRoom()};
+  const a=document.createElement('button');a.className='radd';a.textContent='+';a.onclick=addRoom;
+  c.appendChild(i);c.appendChild(a);
+}
+function addRoom(){const i=document.getElementById('newRoom');const n=(i.value||'').trim();if(!n)return;if(rooms[n]){toast('Room already exists');return;}rooms[n]=Array(10).fill(0).map(blank);order.push(n);room=n;pos=0;save();render()}
+function renameRoom(){
+  const n=(prompt('Rename "'+room+'" to:',room)||'').trim();
+  if(!n||n===room)return;
+  if(rooms[n]){toast('That name is taken');return;}
+  rooms[n]=rooms[room];delete rooms[room];
+  order=order.map(r=>r===room?n:r);
+  room=n;save();render();
+}
+function deleteRoom(){
+  if(order.length<=1){toast('Keep at least one room');return;}
+  if(!confirm('Delete "'+room+'" and all its data?'))return;
+  delete rooms[room];order=order.filter(r=>r!==room);
+  room=order[0];pos=0;save();render();
+}
+
+function renderFieldRow(){
+  const c=document.getElementById('fieldRow');c.innerHTML='';
+  FIELDS.forEach(([k,l])=>{const b=document.createElement('button');b.className='fbtn'+(k===activeField?' sel':'');b.textContent=l;b.onclick=()=>{activeField=k;render()};c.appendChild(b)});
+  document.getElementById('fieldNow').textContent=FIELDS.find(f=>f[0]===activeField)[1];
+}
+function renderData(){
+  const d=rooms[room][pos];
+  const map=[['fMeter','meterId','Meter ID'],['fFlux','fluxId','Flux ID'],['fPos','position','Position'],['fOther','other','Other']];
+  map.forEach(([id,key,lbl])=>{
+    const el=document.getElementById(id);
+    if(editing===key){
+      el.innerHTML=`<label class="lbl">${lbl}</label><input value="${(d[key]||'').replace(/"/g,'&quot;')}">`;
+      const inp=el.querySelector('input');inp.focus();
+      inp.onblur=()=>{d[key]=inp.value;editing=null;save();render()};
+      inp.onkeydown=e=>{if(e.key==='Enter'){d[key]=inp.value;editing=null;save();render()}};
+    }else{
+      el.innerHTML=`<label class="lbl">${lbl}</label><div class="v">${d[key]||'—'}</div>`;
+      el.querySelector('.v').onclick=()=>{editing=key;render()};
+    }
+  });
+}
+function renderTable(){
+  const tb=document.getElementById('tbody');tb.innerHTML='';
+  rooms[room].forEach((r,i)=>{const tr=document.createElement('tr');if(i===pos)tr.className='cur';
+    tr.innerHTML=`<td>${r.position||'—'}</td><td>${r.fluxId||'—'}</td><td>${r.meterId||'—'}</td><td>${r.other||'—'}</td><td class="del">✕</td>`;
+    tr.querySelector('.del').onclick=e=>{e.stopPropagation();rooms[room][i]=blank();save();render()};
+    tr.onclick=e=>{if(!e.target.classList.contains('del')){pos=i;render()}};
+    tb.appendChild(tr)});
+}
+function render(){
+  document.getElementById('posInfo').textContent=`Position ${pos+1} of ${rooms[room].length}`;
+  document.getElementById('roomInfo').textContent=room;
+  document.getElementById('posTitle').textContent=`Position ${pos+1}`;
+  document.getElementById('tblTitle').textContent=room;
+  document.getElementById('prev').disabled=pos===0;
+  document.getElementById('next').disabled=pos===rooms[room].length-1;
+  renderTabs();renderFieldRow();renderData();renderTable();
+}
+
+function fillScan(text){
+  const now=Date.now();
+  if(text===lastScan.v&&now-lastScan.t<2500)return;
+  lastScan={t:now,v:text};
+  rooms[room][pos][activeField]=text;
+  save();toast('✓ '+text);
+  if(navigator.vibrate)navigator.vibrate(80);
+  if(activeField==='meterId'&&pos<rooms[room].length-1)pos++;
+  render();
+}
+
+async function startCam(){
+  const btn=document.getElementById('startBtn');
+  if(scanning){await qr.stop();scanning=false;btn.textContent='▶ Start Camera';return;}
+  if(typeof Html5Qrcode==='undefined'){toast('Scanner lib not loaded');return;}
+  qr=qr||new Html5Qrcode('reader');
+  try{
+    await qr.start({facingMode:'environment'},{fps:10,qrbox:{width:250,height:150}},d=>fillScan(d.trim()));
+    scanning=true;btn.textContent='⏸ Stop Camera';
+  }catch(e){toast('Camera blocked — needs https + permission')}
+}
+
+function exportXlsx(){
+  const rows=[];
+  order.forEach(rm=>rooms[rm].forEach(r=>{
+    if(r.meterId||r.fluxId||r.position||r.other)rows.push({Room:rm,Position:r.position||'',['Flux ID']:r.fluxId||'',['Meter ID']:r.meterId||'',Other:r.other||''});
+  }));
+  if(!rows.length){toast('Nothing to export');return;}
+  const ws=XLSX.utils.json_to_sheet(rows);
+  ws['!cols']=[{wch:14},{wch:14},{wch:16},{wch:16},{wch:14}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Meters');
+  XLSX.writeFile(wb,`meter-inventory-${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+let buf='';
+document.addEventListener('keydown',e=>{
+  if(editing)return;
+  if(e.key==='Enter'){if(buf.trim())fillScan(buf.trim());buf='';}
+  else if(e.key==='Tab'){e.preventDefault();const ks=FIELDS.map(f=>f[0]);activeField=ks[(ks.indexOf(activeField)+1)%ks.length];render();}
+  else if(e.key.length===1)buf+=e.key;
+});
+
+document.getElementById('startBtn').onclick=startCam;
+document.getElementById('renameBtn').onclick=renameRoom;
+document.getElementById('deleteBtn').onclick=deleteRoom;
+document.getElementById('prev').onclick=()=>{if(pos>0){pos--;render()}};
+document.getElementById('next').onclick=()=>{if(pos<rooms[room].length-1){pos++;render()}};
+document.getElementById('clrCur').onclick=()=>{rooms[room][pos]=blank();save();render()};
+document.getElementById('addPos').onclick=()=>{rooms[room].push(blank());pos=rooms[room].length-1;save();render()};
+document.getElementById('expBtn').onclick=exportXlsx;
+
+load();render();
+</script>
+</body>
+</html>
