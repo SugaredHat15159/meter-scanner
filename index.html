@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📱 Meter Scanner</h1>
+  <h1>Meter Scanner</h1>
   <div class="stat" id="stat">0 meters scanned</div>
   <div class="tabs" id="tabs"></div>
   <div class="manage">
@@ -92,7 +92,7 @@
 
   <div class="card gun">
     <div class="gunhead">
-      <h2>🔫 Hardware Scanner</h2>
+      <h2>Hardware Scanner</h2>
       <label class="switch"><input type="checkbox" id="hwMode"> On</label>
     </div>
     <input type="text" id="hwInput" placeholder="Ready — pull trigger to scan" style="display:none" autocomplete="off">
@@ -116,6 +116,7 @@
       <div class="val" id="fieldNow">Position</div>
       <div class="seq" id="seq"></div>
       <label class="toggle"><input type="checkbox" id="autoAdv" checked> Auto-advance to next box</label>
+      <label class="toggle"><input type="checkbox" id="skipOther" checked> Skip "Other" (Position → FlexNet → Meter → next line)</label>
     </div>
     <div class="fieldrow" id="fieldRow"></div>
     <div class="flowbtns">
@@ -168,7 +169,7 @@ let order=['Room One'];
 let room='Room One',pos=0,activeField='position',editing=null,scanning=false;
 let autoAdvance=true, audioCtx=null;
 let lockValue='', paused=false, lastScan={t:0,v:''};
-let hwMode=false;
+let hwMode=false, skipOther=true;
 let stream=null, decodeTimer=null, reader=null, cropCanvas=document.createElement('canvas');
 
 // ---- ZXing setup ----
@@ -229,7 +230,8 @@ function renderFieldRow(){
   FIELDS.forEach(([k,l])=>{const b=document.createElement('button');b.className='fbtn'+(k===activeField?' sel':'');b.textContent=l;b.onclick=()=>{activeField=k;lockValue='';render();refocusHw()};c.appendChild(b)});
   const idx=KEYS.indexOf(activeField);
   document.getElementById('fieldNow').textContent=FIELDS[idx][1];
-  document.getElementById('seq').textContent=`Step ${idx+1} of 4  •  ${FIELDS.map(f=>f[1]).join(' → ')}`;
+  const seq=seqKeys(),labels=seq.map(k=>FIELDS.find(f=>f[0]===k)[1]),sidx=seq.indexOf(activeField);
+  document.getElementById('seq').textContent=`Step ${sidx>=0?sidx+1:'•'} of ${seq.length}  •  ${labels.join(' → ')}`;
 }
 function renderData(){
   const d=rooms[room][pos];
@@ -267,9 +269,11 @@ function render(){
   renderTabs();renderFieldRow();renderData();renderTable();
 }
 
+function seqKeys(){return skipOther?['position','fluxId','meterId']:KEYS;}
 function advanceField(){
-  const idx=KEYS.indexOf(activeField);
-  if(idx<KEYS.length-1){activeField=KEYS[idx+1];}
+  const seq=seqKeys();
+  const idx=seq.indexOf(activeField);
+  if(idx>=0&&idx<seq.length-1){activeField=seq[idx+1];}
   else{activeField='position';if(pos<rooms[room].length-1)pos++;else{rooms[room].push(blank());pos=rooms[room].length-1;}}
   render();
 }
@@ -393,6 +397,7 @@ document.getElementById('photoInput').onchange=e=>{scanPhoto(e.target.files[0]);
 document.getElementById('renameBtn').onclick=renameRoom;
 document.getElementById('deleteBtn').onclick=deleteRoom;
 document.getElementById('autoAdv').onchange=e=>{autoAdvance=e.target.checked};
+document.getElementById('skipOther').onchange=e=>{skipOther=e.target.checked;render()};
 document.getElementById('nextField').onclick=()=>{lockValue='';advanceField();refocusHw()};
 document.getElementById('skipLine').onclick=()=>{nextLine()};
 document.getElementById('prev').onclick=()=>{if(pos>0){pos--;activeField='position';lockValue='';render();refocusHw()}};
