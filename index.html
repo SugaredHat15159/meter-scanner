@@ -10,7 +10,8 @@
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#111827;color:#fff}
   .wrap{max-width:640px;margin:0 auto;padding:1rem;padding-bottom:170px}
-  h1{font-size:1.35rem;margin-bottom:.75rem}
+  h1{font-size:1.35rem;margin-bottom:.25rem}
+  .stat{font-size:.72rem;color:#9ca3af;margin-bottom:.75rem}
   .tabs{display:flex;gap:.5rem;overflow-x:auto;padding-bottom:.5rem;margin-bottom:.5rem}
   .tab{padding:.5rem 1rem;border-radius:.375rem;font-weight:600;white-space:nowrap;border:none;font-size:.85rem}
   .tab.on{background:#2563eb;color:#fff}
@@ -30,19 +31,26 @@
   .zoomwrap{margin-top:.6rem}
   .zoomwrap label{color:#9ca3af;font-size:.7rem;display:block;margin-bottom:.2rem}
   .zoomwrap input{width:100%}
-  .field-now{background:#374151;padding:.85rem;border-radius:.375rem;margin:.75rem 0;text-align:center}
+  .field-now{background:#374151;padding:.75rem;border-radius:.375rem;margin:.75rem 0;text-align:center}
   .field-now .lbl{font-size:.7rem;color:#9ca3af}
   .field-now .val{font-size:1.3rem;font-weight:700;margin:.15rem 0}
-  .fieldrow{display:flex;gap:.4rem;margin-bottom:.75rem}
-  .fbtn{flex:1;padding:.5rem;border:2px solid #4b5563;background:#374151;color:#cbd5e1;border-radius:.375rem;font-size:.72rem;font-weight:600}
+  .field-now .seq{font-size:.66rem;color:#9ca3af}
+  .toggle{display:flex;align-items:center;gap:.4rem;justify-content:center;margin-top:.4rem;font-size:.72rem;color:#cbd5e1}
+  .fieldrow{display:flex;gap:.4rem;margin-bottom:.6rem}
+  .fbtn{flex:1;padding:.5rem;border:2px solid #4b5563;background:#374151;color:#cbd5e1;border-radius:.375rem;font-size:.7rem;font-weight:600}
   .fbtn.sel{border-color:#22c55e;color:#fff;background:#1e3a2f}
+  .flowbtns{display:flex;gap:.4rem;margin-bottom:.6rem}
+  .flowbtn{flex:1;border:none;border-radius:.375rem;padding:.6rem;font-weight:700;font-size:.8rem;color:#fff}
+  .nextf{background:#2563eb}
+  .skipl{background:#7c5e10}
   .nav{display:flex;align-items:center;justify-content:space-between;background:#374151;padding:.6rem;border-radius:.375rem}
   .nbtn{background:#2563eb;color:#fff;border:none;width:44px;height:44px;border-radius:.375rem;font-size:1.1rem}
   .nbtn:disabled{opacity:.4}
   .ninfo{text-align:center}.ninfo .p{font-weight:700}.ninfo .r{font-size:.7rem;color:#9ca3af}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.75rem}
-  .df{padding:.6rem;border-radius:.375rem;background:#374151;border:2px solid #4b5563}
-  .df.meter{border-color:#3b82f6}.df.flux{border-color:#a855f7}.df.pos{border-color:#22c55e}.df.other{border-color:#6b7280}
+  .df{padding:.6rem;border-radius:.375rem;background:#374151;border:2px solid #4b5563;position:relative}
+  .df.pos{border-color:#22c55e}.df.flex{border-color:#a855f7}.df.meter{border-color:#3b82f6}.df.other{border-color:#6b7280}
+  .df.active{box-shadow:0 0 0 2px #fde047 inset}
   .df .lbl{font-size:.68rem;color:#9ca3af;display:block;margin-bottom:.2rem}
   .df .v{font-weight:700;min-height:22px;padding:.15rem;border-radius:.25rem}
   .df input{width:100%;background:#4b5563;color:#fff;border:none;border-radius:.25rem;padding:.3rem;font-weight:700;font-size:.9rem}
@@ -58,12 +66,13 @@
   .foot .in{max-width:640px;margin:0 auto}
   .exp{width:100%;background:#16a34a;color:#fff;border:none;padding:.9rem;border-radius:.375rem;font-weight:700;font-size:1rem}
   .hint{font-size:.7rem;color:#9ca3af;text-align:center;margin-top:.4rem}
-  .toast{position:fixed;top:1rem;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:.6rem 1rem;border-radius:.375rem;font-weight:600;z-index:999;display:none}
+  .toast{position:fixed;top:1rem;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:.6rem 1rem;border-radius:.375rem;font-weight:600;z-index:999;display:none;max-width:92vw;text-align:center}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>📱 Meter Scanner</h1>
+  <div class="stat" id="stat">0 meters scanned</div>
   <div class="tabs" id="tabs"></div>
   <div class="manage">
     <button class="mbtn rename" id="renameBtn">✎ Rename Room</button>
@@ -80,9 +89,15 @@
     </div>
     <div class="field-now">
       <div class="lbl">Scanning into</div>
-      <div class="val" id="fieldNow">Meter ID</div>
+      <div class="val" id="fieldNow">Position</div>
+      <div class="seq" id="seq"></div>
+      <label class="toggle"><input type="checkbox" id="autoAdv" checked> Auto-advance to next box</label>
     </div>
     <div class="fieldrow" id="fieldRow"></div>
+    <div class="flowbtns">
+      <button class="flowbtn nextf" id="nextField">Next Field ▸</button>
+      <button class="flowbtn skipl" id="skipLine">Skip Line (no meter)</button>
+    </div>
     <div class="nav">
       <button class="nbtn" id="prev">◀</button>
       <div class="ninfo"><div class="p" id="posInfo">Position 1 of 10</div><div class="r" id="roomInfo">Room One</div></div>
@@ -93,9 +108,9 @@
   <div class="card">
     <h2 id="posTitle">Position 1</h2>
     <div class="grid">
-      <div class="df meter" id="fMeter"></div>
-      <div class="df flux" id="fFlux"></div>
       <div class="df pos" id="fPos"></div>
+      <div class="df flex" id="fFlux"></div>
+      <div class="df meter" id="fMeter"></div>
       <div class="df other" id="fOther"></div>
     </div>
     <div class="rowbtns">
@@ -108,7 +123,7 @@
   <div class="card">
     <h2 id="tblTitle">Room One</h2>
     <div style="overflow-x:auto">
-      <table><thead><tr><th>Position</th><th>Flux ID</th><th>Meter ID</th><th>Other</th><th></th></tr></thead>
+      <table><thead><tr><th>Position</th><th>FlexNet ID</th><th>Meter ID</th><th>Other</th><th></th></tr></thead>
       <tbody id="tbody"></tbody></table>
     </div>
   </div>
@@ -121,55 +136,53 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const FIELDS=[['meterId','Meter ID'],['fluxId','Flux ID'],['position','Position'],['other','Other']];
+// scan order: Position -> FlexNet ID -> Meter ID -> Other
+const FIELDS=[['position','Position'],['fluxId','FlexNet ID'],['meterId','Meter ID'],['other','Other']];
+const KEYS=FIELDS.map(f=>f[0]);
 const blank=()=>({position:'',fluxId:'',meterId:'',other:''});
 let rooms={'Room One':Array(10).fill(0).map(blank)};
 let order=['Room One'];
-let room='Room One',pos=0,activeField='meterId',editing=null,qr=null,scanning=false,lastScan={t:0,v:''};
+let room='Room One',pos=0,activeField='position',editing=null,qr=null,scanning=false,lastScan={t:0,v:''};
+let autoAdvance=true, audioCtx=null;
 
 function load(){try{const s=localStorage.getItem('meterInv3');if(s){const o=JSON.parse(s);rooms=o.rooms;order=o.order||Object.keys(rooms);room=order[0];}}catch(e){}}
 function save(){try{localStorage.setItem('meterInv3',JSON.stringify({rooms,order}))}catch(e){}}
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',1500)}
+function toast(m,color){const t=document.getElementById('toast');t.textContent=m;t.style.background=color||'#16a34a';t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',1600)}
+function beep(){try{audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.frequency.value=880;o.connect(g);g.connect(audioCtx.destination);g.gain.value=.15;o.start();o.stop(audioCtx.currentTime+.08)}catch(e){}}
+
+function totalMeters(){let n=0;order.forEach(rm=>rooms[rm].forEach(r=>{if(r.meterId)n++}));return n}
+function meterExists(val){let hit=false;order.forEach(rm=>rooms[rm].forEach((r,i)=>{if(r.meterId===val&&!(rm===room&&i===pos))hit=true}));return hit}
 
 function renderTabs(){
   const c=document.getElementById('tabs');c.innerHTML='';
-  order.forEach(r=>{const b=document.createElement('button');b.className='tab '+(r===room?'on':'off');b.textContent=r;b.onclick=()=>{room=r;pos=0;render()};c.appendChild(b)});
+  order.forEach(r=>{const b=document.createElement('button');b.className='tab '+(r===room?'on':'off');b.textContent=r;b.onclick=()=>{room=r;pos=0;activeField='position';render()};c.appendChild(b)});
   const i=document.createElement('input');i.className='rin';i.placeholder='New room…';i.id='newRoom';
   i.onkeydown=e=>{if(e.key==='Enter')addRoom()};
   const a=document.createElement('button');a.className='radd';a.textContent='+';a.onclick=addRoom;
   c.appendChild(i);c.appendChild(a);
 }
-function addRoom(){const i=document.getElementById('newRoom');const n=(i.value||'').trim();if(!n)return;if(rooms[n]){toast('Room already exists');return;}rooms[n]=Array(10).fill(0).map(blank);order.push(n);room=n;pos=0;save();render()}
-function renameRoom(){
-  const n=(prompt('Rename "'+room+'" to:',room)||'').trim();
-  if(!n||n===room)return;
-  if(rooms[n]){toast('That name is taken');return;}
-  rooms[n]=rooms[room];delete rooms[room];
-  order=order.map(r=>r===room?n:r);
-  room=n;save();render();
-}
-function deleteRoom(){
-  if(order.length<=1){toast('Keep at least one room');return;}
-  if(!confirm('Delete "'+room+'" and all its data?'))return;
-  delete rooms[room];order=order.filter(r=>r!==room);
-  room=order[0];pos=0;save();render();
-}
+function addRoom(){const i=document.getElementById('newRoom');const n=(i.value||'').trim();if(!n)return;if(rooms[n]){toast('Room already exists','#b45309');return;}rooms[n]=Array(10).fill(0).map(blank);order.push(n);room=n;pos=0;activeField='position';save();render()}
+function renameRoom(){const n=(prompt('Rename "'+room+'" to:',room)||'').trim();if(!n||n===room)return;if(rooms[n]){toast('That name is taken','#b45309');return;}rooms[n]=rooms[room];delete rooms[room];order=order.map(r=>r===room?n:r);room=n;save();render();}
+function deleteRoom(){if(order.length<=1){toast('Keep at least one room','#b45309');return;}if(!confirm('Delete "'+room+'" and all its data?'))return;delete rooms[room];order=order.filter(r=>r!==room);room=order[0];pos=0;activeField='position';save();render();}
 
 function renderFieldRow(){
   const c=document.getElementById('fieldRow');c.innerHTML='';
   FIELDS.forEach(([k,l])=>{const b=document.createElement('button');b.className='fbtn'+(k===activeField?' sel':'');b.textContent=l;b.onclick=()=>{activeField=k;render()};c.appendChild(b)});
-  document.getElementById('fieldNow').textContent=FIELDS.find(f=>f[0]===activeField)[1];
+  const idx=KEYS.indexOf(activeField);
+  document.getElementById('fieldNow').textContent=FIELDS[idx][1];
+  document.getElementById('seq').textContent=`Step ${idx+1} of 4  •  ${FIELDS.map(f=>f[1]).join(' → ')}`;
 }
 function renderData(){
   const d=rooms[room][pos];
-  const map=[['fMeter','meterId','Meter ID'],['fFlux','fluxId','Flux ID'],['fPos','position','Position'],['fOther','other','Other']];
+  const map=[['fPos','position','Position'],['fFlux','fluxId','FlexNet ID'],['fMeter','meterId','Meter ID'],['fOther','other','Other']];
   map.forEach(([id,key,lbl])=>{
     const el=document.getElementById(id);
+    el.classList.toggle('active',key===activeField);
     if(editing===key){
       el.innerHTML=`<label class="lbl">${lbl}</label><input value="${(d[key]||'').replace(/"/g,'&quot;')}">`;
       const inp=el.querySelector('input');inp.focus();
-      inp.onblur=()=>{d[key]=inp.value;editing=null;save();render()};
-      inp.onkeydown=e=>{if(e.key==='Enter'){d[key]=inp.value;editing=null;save();render()}};
+      inp.onblur=()=>{d[key]=inp.value.trim();editing=null;save();render()};
+      inp.onkeydown=e=>{if(e.key==='Enter'){d[key]=inp.value.trim();editing=null;save();if(autoAdvance)advanceField();else render()}};
     }else{
       el.innerHTML=`<label class="lbl">${lbl}</label><div class="v">${d[key]||'—'}</div>`;
       el.querySelector('.v').onclick=()=>{editing=key;render()};
@@ -181,7 +194,7 @@ function renderTable(){
   rooms[room].forEach((r,i)=>{const tr=document.createElement('tr');if(i===pos)tr.className='cur';
     tr.innerHTML=`<td>${r.position||'—'}</td><td>${r.fluxId||'—'}</td><td>${r.meterId||'—'}</td><td>${r.other||'—'}</td><td class="del">✕</td>`;
     tr.querySelector('.del').onclick=e=>{e.stopPropagation();if(rooms[room].length>1){rooms[room].splice(i,1);if(pos>=rooms[room].length)pos=rooms[room].length-1;}else{rooms[room][0]=blank();}save();render()};
-    tr.onclick=e=>{if(!e.target.classList.contains('del')){pos=i;render()}};
+    tr.onclick=e=>{if(!e.target.classList.contains('del')){pos=i;activeField='position';render()}};
     tb.appendChild(tr)});
 }
 function render(){
@@ -189,31 +202,49 @@ function render(){
   document.getElementById('roomInfo').textContent=room;
   document.getElementById('posTitle').textContent=`Position ${pos+1}`;
   document.getElementById('tblTitle').textContent=room;
+  document.getElementById('stat').textContent=`${totalMeters()} meters scanned`;
   document.getElementById('prev').disabled=pos===0;
   document.getElementById('next').disabled=pos===rooms[room].length-1;
   renderTabs();renderFieldRow();renderData();renderTable();
 }
 
+function advanceField(){
+  const idx=KEYS.indexOf(activeField);
+  if(idx<KEYS.length-1){
+    activeField=KEYS[idx+1];
+  }else{
+    // finished Other -> go to next line at Position (add a line if at the end)
+    activeField='position';
+    if(pos<rooms[room].length-1)pos++;
+    else{rooms[room].push(blank());pos=rooms[room].length-1;}
+  }
+  render();
+}
+function nextLine(){activeField='position';if(pos<rooms[room].length-1)pos++;else{rooms[room].push(blank());pos=rooms[room].length-1;}save();render();}
+
 function fillScan(text){
   const now=Date.now();
   if(text===lastScan.v&&now-lastScan.t<2500)return;
   lastScan={t:now,v:text};
+  if(activeField==='meterId'&&meterExists(text)){toast('⚠ Meter already scanned: '+text,'#b45309');}
+  else{toast('✓ '+text);}
   rooms[room][pos][activeField]=text;
-  save();toast('✓ '+text);
-  if(navigator.vibrate)navigator.vibrate(80);
-  if(activeField==='meterId'&&pos<rooms[room].length-1)pos++;
-  render();
+  save();beep();
+  if(navigator.vibrate)navigator.vibrate(60);
+  if(autoAdvance)advanceField();else render();
 }
 
 async function startCam(){
   const btn=document.getElementById('startBtn');
   if(scanning){await qr.stop();scanning=false;btn.textContent='▶ Start Camera';document.getElementById('zoomWrap').style.display='none';return;}
-  if(typeof Html5Qrcode==='undefined'){toast('Scanner lib not loaded');return;}
-  qr=qr||new Html5Qrcode('reader');
+  if(typeof Html5Qrcode==='undefined'){toast('Scanner lib not loaded','#b45309');return;}
+  const F=(typeof Html5QrcodeSupportedFormats!=='undefined')?Html5QrcodeSupportedFormats:null;
+  const formats=F?[F.CODE_39,F.CODE_128,F.CODE_93,F.ITF,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.QR_CODE]:undefined;
+  qr=qr||new Html5Qrcode('reader',{formatsToSupport:formats,experimentalFeatures:{useBarCodeDetectorIfSupported:true}});
   try{
     await qr.start(
       {facingMode:'environment'},
-      {fps:10,qrbox:{width:300,height:170},videoConstraints:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}},
+      {fps:15,qrbox:undefined,videoConstraints:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}},
       d=>fillScan(d.trim())
     );
     scanning=true;btn.textContent='⏸ Stop Camera';
@@ -227,15 +258,15 @@ async function startCam(){
         s.oninput=()=>qr.applyVideoConstraints({advanced:[{zoom:parseFloat(s.value)}]});
       }
     }catch(e){}
-  }catch(e){toast('Camera blocked — needs https + permission')}
+  }catch(e){toast('Camera blocked — needs https + permission','#b45309')}
 }
 
 function exportXlsx(){
   const rows=[];
   order.forEach(rm=>rooms[rm].forEach(r=>{
-    if(r.meterId||r.fluxId||r.position||r.other)rows.push({Room:rm,Position:r.position||'',['Flux ID']:r.fluxId||'',['Meter ID']:r.meterId||'',Other:r.other||''});
+    if(r.meterId||r.fluxId||r.position||r.other)rows.push({Room:rm,Position:r.position||'',['FlexNet ID']:r.fluxId||'',['Meter ID']:r.meterId||'',Other:r.other||''});
   }));
-  if(!rows.length){toast('Nothing to export');return;}
+  if(!rows.length){toast('Nothing to export','#b45309');return;}
   const ws=XLSX.utils.json_to_sheet(rows);
   ws['!cols']=[{wch:14},{wch:14},{wch:16},{wch:16},{wch:14}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Meters');
@@ -246,18 +277,21 @@ let buf='';
 document.addEventListener('keydown',e=>{
   if(editing)return;
   if(e.key==='Enter'){if(buf.trim())fillScan(buf.trim());buf='';}
-  else if(e.key==='Tab'){e.preventDefault();const ks=FIELDS.map(f=>f[0]);activeField=ks[(ks.indexOf(activeField)+1)%ks.length];render();}
+  else if(e.key==='Tab'){e.preventDefault();advanceField();}
   else if(e.key.length===1)buf+=e.key;
 });
 
 document.getElementById('startBtn').onclick=startCam;
 document.getElementById('renameBtn').onclick=renameRoom;
 document.getElementById('deleteBtn').onclick=deleteRoom;
-document.getElementById('prev').onclick=()=>{if(pos>0){pos--;render()}};
-document.getElementById('next').onclick=()=>{if(pos<rooms[room].length-1){pos++;render()}};
-document.getElementById('clrCur').onclick=()=>{rooms[room][pos]=blank();save();render()};
-document.getElementById('addPos').onclick=()=>{rooms[room].push(blank());pos=rooms[room].length-1;save();render()};
-document.getElementById('subPos').onclick=()=>{if(rooms[room].length>1){rooms[room].splice(pos,1);if(pos>=rooms[room].length)pos=rooms[room].length-1;save();render()}else{toast('Need at least one position')}};
+document.getElementById('autoAdv').onchange=e=>{autoAdvance=e.target.checked};
+document.getElementById('nextField').onclick=()=>{advanceField()};
+document.getElementById('skipLine').onclick=()=>{nextLine()};
+document.getElementById('prev').onclick=()=>{if(pos>0){pos--;activeField='position';render()}};
+document.getElementById('next').onclick=()=>{if(pos<rooms[room].length-1){pos++;activeField='position';render()}};
+document.getElementById('clrCur').onclick=()=>{rooms[room][pos]=blank();activeField='position';save();render()};
+document.getElementById('addPos').onclick=()=>{rooms[room].push(blank());pos=rooms[room].length-1;activeField='position';save();render()};
+document.getElementById('subPos').onclick=()=>{if(rooms[room].length>1){rooms[room].splice(pos,1);if(pos>=rooms[room].length)pos=rooms[room].length-1;save();render()}else{toast('Need at least one position','#b45309')}};
 document.getElementById('expBtn').onclick=exportXlsx;
 
 load();render();
