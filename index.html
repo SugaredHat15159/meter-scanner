@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Meter Scanner</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#111827;color:#fff}
@@ -24,9 +25,17 @@
   .mbtn.delete{background:#7f1d1d}
   .card{background:#1f2937;border-radius:.5rem;padding:1rem;margin-bottom:1rem;border:2px solid #374151}
   .card.hl{border-color:#3b82f6}
+  .card.gun{border-color:#22c55e}
   .card h2{font-size:1rem;margin-bottom:.75rem}
-  #reader{width:100%;border-radius:.5rem;overflow:hidden}
-  #reader video{border-radius:.5rem}
+  .gunhead{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+  .gunhead h2{margin:0}
+  .switch{display:flex;align-items:center;gap:.4rem;font-size:.8rem;font-weight:600}
+  #hwInput{width:100%;margin-top:.7rem;padding:.7rem;border-radius:.375rem;border:2px solid #22c55e;background:#0b1f16;color:#fff;font-size:1rem;font-weight:700}
+  .gunstatus{font-size:.72rem;margin-top:.4rem;color:#86efac}
+  .gunstatus.off{color:#9ca3af}
+  #reader{position:relative;width:100%;border-radius:.5rem;overflow:hidden;background:#000;min-height:40px}
+  #video{width:100%;display:block;border-radius:.5rem}
+  .aim{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:88%;aspect-ratio:2.4/1;border:2px solid #22c55e;border-radius:.4rem;box-shadow:0 0 0 2000px rgba(0,0,0,.18);pointer-events:none}
   .cambtns{display:flex;gap:.5rem;margin-bottom:.75rem}
   .startbtn{flex:1;background:#2563eb;color:#fff;border:none;padding:.9rem;border-radius:.375rem;font-weight:700;font-size:.95rem}
   .photobtn{flex:1;background:#7c3aed;color:#fff;border:none;padding:.9rem;border-radius:.375rem;font-weight:700;font-size:.95rem}
@@ -81,6 +90,15 @@
     <button class="mbtn delete" id="deleteBtn">🗑 Delete Room</button>
   </div>
 
+  <div class="card gun">
+    <div class="gunhead">
+      <h2>🔫 Hardware Scanner</h2>
+      <label class="switch"><input type="checkbox" id="hwMode"> On</label>
+    </div>
+    <input type="text" id="hwInput" placeholder="Ready — pull trigger to scan" style="display:none" autocomplete="off">
+    <div class="gunstatus off" id="hwStatus">Off — flip On when your scanner is plugged in</div>
+  </div>
+
   <div class="card hl">
     <h2>Camera Scanner</h2>
     <div class="cambtns">
@@ -88,8 +106,7 @@
       <button class="photobtn" id="photoBtn">📷 Scan from Photo</button>
     </div>
     <input type="file" accept="image/*" capture="environment" id="photoInput" style="display:none">
-    <div id="reader"></div>
-    <div id="fileReader" style="display:none"></div>
+    <div id="reader"><video id="video" muted playsinline></video><div class="aim" id="aim" style="display:none"></div></div>
     <div class="zoomwrap" id="zoomWrap" style="display:none">
       <label>Zoom</label>
       <input type="range" id="zoom">
@@ -148,11 +165,29 @@ const KEYS=FIELDS.map(f=>f[0]);
 const blank=()=>({position:'',fluxId:'',meterId:'',other:''});
 let rooms={'Room One':Array(10).fill(0).map(blank)};
 let order=['Room One'];
-let room='Room One',pos=0,activeField='position',editing=null,qr=null,scanning=false;
+let room='Room One',pos=0,activeField='position',editing=null,scanning=false;
 let autoAdvance=true, audioCtx=null;
 let lockValue='', paused=false, lastScan={t:0,v:''};
+let hwMode=false;
+let stream=null, decodeTimer=null, reader=null, cropCanvas=document.createElement('canvas');
 
-function fmts(){const F=(typeof Html5QrcodeSupportedFormats!=='undefined')?Html5QrcodeSupportedFormats:null;return F?[F.CODE_39,F.CODE_128,F.CODE_93,F.ITF,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.QR_CODE]:undefined;}
+// ---- ZXing setup ----
+function getReader(){
+  if(reader)return reader;
+  const ZL=window.ZXing||window.ZXingBrowser, ZB=window.ZXingBrowser;
+  if(!ZB||!ZL)return null;
+  const hints=new Map();
+  try{
+    hints.set(ZL.DecodeHintType.TRY_HARDER,true);
+    hints.set(ZL.DecodeHintType.POSSIBLE_FORMATS,[
+      ZL.BarcodeFormat.CODE_39,ZL.BarcodeFormat.CODE_128,ZL.BarcodeFormat.CODE_93,
+      ZL.BarcodeFormat.ITF,ZL.BarcodeFormat.EAN_13,ZL.BarcodeFormat.EAN_8,
+      ZL.BarcodeFormat.UPC_A,ZL.BarcodeFormat.UPC_E,ZL.BarcodeFormat.QR_CODE
+    ]);
+  }catch(e){}
+  reader=new ZB.BrowserMultiFormatReader(hints);
+  return reader;
+}
 
 function load(){try{const s=localStorage.getItem('meterInv3');if(s){const o=JSON.parse(s);rooms=o.rooms;order=o.order||Object.keys(rooms);room=order[0];}}catch(e){}}
 function save(){try{localStorage.setItem('meterInv3',JSON.stringify({rooms,order}))}catch(e){}}
@@ -162,9 +197,24 @@ function beep(){try{audioCtx=audioCtx||new (window.AudioContext||window.webkitAu
 function totalMeters(){let n=0;order.forEach(rm=>rooms[rm].forEach(r=>{if(r.meterId)n++}));return n}
 function meterExists(val){let hit=false;order.forEach(rm=>rooms[rm].forEach((r,i)=>{if(r.meterId===val&&!(rm===room&&i===pos))hit=true}));return hit}
 
+function refocusHw(){
+  if(!hwMode||editing)return;
+  const ae=document.activeElement;
+  if(ae&&['INPUT','SELECT','TEXTAREA'].includes(ae.tagName)&&ae.id!=='hwInput')return;
+  const el=document.getElementById('hwInput');if(el)el.focus();
+}
+function setHwMode(on){
+  hwMode=on;
+  const inp=document.getElementById('hwInput'),st=document.getElementById('hwStatus');
+  inp.style.display=on?'block':'none';
+  st.textContent=on?'● Ready — keep this window active and scan away':'Off — flip On when your scanner is plugged in';
+  st.classList.toggle('off',!on);
+  if(on){inp.value='';setTimeout(refocusHw,50);beep();}
+}
+
 function renderTabs(){
   const c=document.getElementById('tabs');c.innerHTML='';
-  order.forEach(r=>{const b=document.createElement('button');b.className='tab '+(r===room?'on':'off');b.textContent=r;b.onclick=()=>{room=r;pos=0;activeField='position';lockValue='';render()};c.appendChild(b)});
+  order.forEach(r=>{const b=document.createElement('button');b.className='tab '+(r===room?'on':'off');b.textContent=r;b.onclick=()=>{room=r;pos=0;activeField='position';lockValue='';render();refocusHw()};c.appendChild(b)});
   const i=document.createElement('input');i.className='rin';i.placeholder='New room…';i.id='newRoom';
   i.onkeydown=e=>{if(e.key==='Enter')addRoom()};
   const a=document.createElement('button');a.className='radd';a.textContent='+';a.onclick=addRoom;
@@ -176,7 +226,7 @@ function deleteRoom(){if(order.length<=1){toast('Keep at least one room','#b4530
 
 function renderFieldRow(){
   const c=document.getElementById('fieldRow');c.innerHTML='';
-  FIELDS.forEach(([k,l])=>{const b=document.createElement('button');b.className='fbtn'+(k===activeField?' sel':'');b.textContent=l;b.onclick=()=>{activeField=k;lockValue='';render()};c.appendChild(b)});
+  FIELDS.forEach(([k,l])=>{const b=document.createElement('button');b.className='fbtn'+(k===activeField?' sel':'');b.textContent=l;b.onclick=()=>{activeField=k;lockValue='';render();refocusHw()};c.appendChild(b)});
   const idx=KEYS.indexOf(activeField);
   document.getElementById('fieldNow').textContent=FIELDS[idx][1];
   document.getElementById('seq').textContent=`Step ${idx+1} of 4  •  ${FIELDS.map(f=>f[1]).join(' → ')}`;
@@ -191,7 +241,7 @@ function renderData(){
       el.innerHTML=`<label class="lbl">${lbl}</label><input value="${(d[key]||'').replace(/"/g,'&quot;')}">`;
       const inp=el.querySelector('input');inp.focus();
       inp.onblur=()=>{d[key]=inp.value.trim();editing=null;save();render()};
-      inp.onkeydown=e=>{if(e.key==='Enter'){d[key]=inp.value.trim();editing=null;save();if(autoAdvance)advanceField();else render()}};
+      inp.onkeydown=e=>{if(e.key==='Enter'){d[key]=inp.value.trim();editing=null;save();if(autoAdvance)advanceField();else render();refocusHw()}};
     }else{
       el.innerHTML=`<label class="lbl">${lbl}</label><div class="v">${d[key]||'—'}</div>`;
       el.querySelector('.v').onclick=()=>{editing=key;render()};
@@ -203,7 +253,7 @@ function renderTable(){
   rooms[room].forEach((r,i)=>{const tr=document.createElement('tr');if(i===pos)tr.className='cur';
     tr.innerHTML=`<td>${r.position||'—'}</td><td>${r.fluxId||'—'}</td><td>${r.meterId||'—'}</td><td>${r.other||'—'}</td><td class="del">✕</td>`;
     tr.querySelector('.del').onclick=e=>{e.stopPropagation();if(rooms[room].length>1){rooms[room].splice(i,1);if(pos>=rooms[room].length)pos=rooms[room].length-1;}else{rooms[room][0]=blank();}save();render()};
-    tr.onclick=e=>{if(!e.target.classList.contains('del')){pos=i;activeField='position';lockValue='';render()}};
+    tr.onclick=e=>{if(!e.target.classList.contains('del')){pos=i;activeField='position';lockValue='';render();refocusHw()}};
     tb.appendChild(tr)});
 }
 function render(){
@@ -223,14 +273,14 @@ function advanceField(){
   else{activeField='position';if(pos<rooms[room].length-1)pos++;else{rooms[room].push(blank());pos=rooms[room].length-1;}}
   render();
 }
-function nextLine(){activeField='position';lockValue='';if(pos<rooms[room].length-1)pos++;else{rooms[room].push(blank());pos=rooms[room].length-1;}save();render();}
+function nextLine(){activeField='position';lockValue='';if(pos<rooms[room].length-1)pos++;else{rooms[room].push(blank());pos=rooms[room].length-1;}save();render();refocusHw();}
 
 function fillScan(text){
   if(!text)return;
-  if(scanning&&paused)return;               // brief cooldown after a live-camera read
-  if(text===lockValue)return;               // same barcode still in view -> ignore
+  if(scanning&&paused)return;
+  if(text===lockValue)return;
   const now=Date.now();
-  if(text===lastScan.v&&now-lastScan.t<700)return; // flicker guard
+  if(text===lastScan.v&&now-lastScan.t<700)return;
   lastScan={t:now,v:text};
   lockValue=text;
   if(activeField==='meterId'&&meterExists(text)){toast('⚠ Meter already scanned: '+text,'#b45309');}
@@ -240,30 +290,53 @@ function fillScan(text){
   if(navigator.vibrate)navigator.vibrate(60);
   if(scanning){paused=true;setTimeout(()=>{paused=false},1200);}
   if(autoAdvance)advanceField();else render();
+  refocusHw();
+}
+
+// ---- live camera: ZXing decode on a centered crop ----
+function decodeFrame(){
+  const v=document.getElementById('video');
+  if(!v.videoWidth||paused)return;
+  const vw=v.videoWidth,vh=v.videoHeight;
+  const cw=Math.round(vw*0.88), ch=Math.round(cw/2.4);
+  const sx=Math.round((vw-cw)/2), sy=Math.round((vh-ch)/2);
+  cropCanvas.width=cw;cropCanvas.height=ch;
+  cropCanvas.getContext('2d').drawImage(v,sx,sy,cw,ch,0,0,cw,ch);
+  try{
+    const res=reader.decodeFromCanvas(cropCanvas);
+    if(res){const t=res.getText();if(t)fillScan(t.trim());}
+  }catch(e){/* no barcode this frame */}
 }
 
 async function startCam(){
-  const btn=document.getElementById('startBtn');
-  if(scanning){await qr.stop();scanning=false;btn.textContent='▶ Live Camera';document.getElementById('zoomWrap').style.display='none';return;}
-  if(typeof Html5Qrcode==='undefined'){toast('Scanner lib not loaded','#b45309');return;}
-  qr=qr||new Html5Qrcode('reader',{formatsToSupport:fmts(),experimentalFeatures:{useBarCodeDetectorIfSupported:true}});
+  const btn=document.getElementById('startBtn'),v=document.getElementById('video'),aim=document.getElementById('aim');
+  if(scanning){
+    scanning=false;btn.textContent='▶ Live Camera';
+    if(decodeTimer){clearInterval(decodeTimer);decodeTimer=null;}
+    if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+    v.srcObject=null;aim.style.display='none';document.getElementById('zoomWrap').style.display='none';
+    return;
+  }
+  if(!getReader()){toast('Scanner engine not loaded — check connection','#b45309');return;}
   try{
-    await qr.start(
-      {facingMode:'environment'},
-      {fps:15,
-       qrbox:(vw,vh)=>{const w=Math.min(300,vw-24);return {width:w,height:Math.round(w*0.55)};},
-       videoConstraints:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}},
-      d=>fillScan(d.trim())
-    );
-    scanning=true;btn.textContent='⏸ Stop';
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});
+    v.srcObject=stream;await v.play();
+    scanning=true;btn.textContent='⏸ Stop';aim.style.display='block';
+    if(typeof reader.decodeFromCanvas==='function'){
+      decodeTimer=setInterval(decodeFrame,130);
+    }else{
+      // fallback: full-frame continuous decode
+      reader.decodeFromVideoElement(v,(result)=>{if(result)fillScan(result.getText().trim());});
+    }
+    // zoom
     try{
-      const caps=qr.getRunningTrackCapabilities();
+      const track=stream.getVideoTracks()[0],caps=track.getCapabilities?track.getCapabilities():{};
       if(caps&&caps.zoom){
         const w=document.getElementById('zoomWrap'),s=document.getElementById('zoom');
         s.min=caps.zoom.min;s.max=caps.zoom.max;s.step=caps.zoom.step||0.1;
-        s.value=(qr.getRunningTrackSettings().zoom)||caps.zoom.min;
+        const cur=track.getSettings().zoom;s.value=cur||caps.zoom.min;
         w.style.display='block';
-        s.oninput=()=>qr.applyVideoConstraints({advanced:[{zoom:parseFloat(s.value)}]});
+        s.oninput=()=>track.applyConstraints({advanced:[{zoom:parseFloat(s.value)}]});
       }
     }catch(e){}
   }catch(e){toast('Camera blocked — needs https + permission','#b45309')}
@@ -271,15 +344,16 @@ async function startCam(){
 
 async function scanPhoto(file){
   if(!file)return;
-  const fr=new Html5Qrcode('fileReader',{formatsToSupport:fmts()});
+  if(!getReader()){toast('Scanner engine not loaded','#b45309');return;}
+  const url=URL.createObjectURL(file);
   toast('Reading photo…');
   try{
-    const res=await fr.scanFileV2(file,false);
-    lockValue=''; // a still shot is a deliberate single read
-    fillScan((res.decodedText||'').trim());
+    const res=await reader.decodeFromImageUrl(url);
+    lockValue='';
+    fillScan((res.getText()||'').trim());
   }catch(e){
     toast('No barcode found — get closer, fill the frame, hold level','#b45309');
-  }finally{try{await fr.clear()}catch(e){}}
+  }finally{URL.revokeObjectURL(url);}
 }
 
 function exportXlsx(){
@@ -294,27 +368,38 @@ function exportXlsx(){
   XLSX.writeFile(wb,`meter-inventory-${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
+// hardware scanner (focus-locked field)
+const hwInput=document.getElementById('hwInput');
+hwInput.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();const val=hwInput.value.trim();hwInput.value='';if(val)fillScan(val);}
+  else if(e.key==='Tab'){e.preventDefault();const val=hwInput.value.trim();hwInput.value='';if(val){fillScan(val);}else{advanceField();}}
+});
+hwInput.addEventListener('blur',()=>{setTimeout(refocusHw,150)});
+document.addEventListener('click',()=>{setTimeout(refocusHw,0)});
+
+// fallback wedge capture when hardware mode is OFF
 let buf='';
 document.addEventListener('keydown',e=>{
-  if(editing)return;
+  if(hwMode||editing)return;
   if(e.key==='Enter'){if(buf.trim())fillScan(buf.trim());buf='';}
   else if(e.key==='Tab'){e.preventDefault();advanceField();}
   else if(e.key.length===1)buf+=e.key;
 });
 
+document.getElementById('hwMode').onchange=e=>setHwMode(e.target.checked);
 document.getElementById('startBtn').onclick=startCam;
 document.getElementById('photoBtn').onclick=()=>document.getElementById('photoInput').click();
 document.getElementById('photoInput').onchange=e=>{scanPhoto(e.target.files[0]);e.target.value='';};
 document.getElementById('renameBtn').onclick=renameRoom;
 document.getElementById('deleteBtn').onclick=deleteRoom;
 document.getElementById('autoAdv').onchange=e=>{autoAdvance=e.target.checked};
-document.getElementById('nextField').onclick=()=>{lockValue='';advanceField()};
+document.getElementById('nextField').onclick=()=>{lockValue='';advanceField();refocusHw()};
 document.getElementById('skipLine').onclick=()=>{nextLine()};
-document.getElementById('prev').onclick=()=>{if(pos>0){pos--;activeField='position';lockValue='';render()}};
-document.getElementById('next').onclick=()=>{if(pos<rooms[room].length-1){pos++;activeField='position';lockValue='';render()}};
-document.getElementById('clrCur').onclick=()=>{rooms[room][pos]=blank();activeField='position';lockValue='';save();render()};
-document.getElementById('addPos').onclick=()=>{rooms[room].push(blank());pos=rooms[room].length-1;activeField='position';save();render()};
-document.getElementById('subPos').onclick=()=>{if(rooms[room].length>1){rooms[room].splice(pos,1);if(pos>=rooms[room].length)pos=rooms[room].length-1;save();render()}else{toast('Need at least one position','#b45309')}};
+document.getElementById('prev').onclick=()=>{if(pos>0){pos--;activeField='position';lockValue='';render();refocusHw()}};
+document.getElementById('next').onclick=()=>{if(pos<rooms[room].length-1){pos++;activeField='position';lockValue='';render();refocusHw()}};
+document.getElementById('clrCur').onclick=()=>{rooms[room][pos]=blank();activeField='position';lockValue='';save();render();refocusHw()};
+document.getElementById('addPos').onclick=()=>{rooms[room].push(blank());pos=rooms[room].length-1;activeField='position';save();render();refocusHw()};
+document.getElementById('subPos').onclick=()=>{if(rooms[room].length>1){rooms[room].splice(pos,1);if(pos>=rooms[room].length)pos=rooms[room].length-1;save();render();refocusHw()}else{toast('Need at least one position','#b45309')}};
 document.getElementById('expBtn').onclick=exportXlsx;
 
 load();render();
