@@ -27,7 +27,9 @@
   .card h2{font-size:1rem;margin-bottom:.75rem}
   #reader{width:100%;border-radius:.5rem;overflow:hidden}
   #reader video{border-radius:.5rem}
-  .startbtn{width:100%;background:#2563eb;color:#fff;border:none;padding:.9rem;border-radius:.375rem;font-weight:700;font-size:1rem;margin-bottom:.75rem}
+  .cambtns{display:flex;gap:.5rem;margin-bottom:.75rem}
+  .startbtn{flex:1;background:#2563eb;color:#fff;border:none;padding:.9rem;border-radius:.375rem;font-weight:700;font-size:.95rem}
+  .photobtn{flex:1;background:#7c3aed;color:#fff;border:none;padding:.9rem;border-radius:.375rem;font-weight:700;font-size:.95rem}
   .zoomwrap{margin-top:.6rem}
   .zoomwrap label{color:#9ca3af;font-size:.7rem;display:block;margin-bottom:.2rem}
   .zoomwrap input{width:100%}
@@ -81,8 +83,13 @@
 
   <div class="card hl">
     <h2>Camera Scanner</h2>
-    <button class="startbtn" id="startBtn">▶ Start Camera</button>
+    <div class="cambtns">
+      <button class="startbtn" id="startBtn">▶ Live Camera</button>
+      <button class="photobtn" id="photoBtn">📷 Scan from Photo</button>
+    </div>
+    <input type="file" accept="image/*" capture="environment" id="photoInput" style="display:none">
     <div id="reader"></div>
+    <div id="fileReader" style="display:none"></div>
     <div class="zoomwrap" id="zoomWrap" style="display:none">
       <label>Zoom</label>
       <input type="range" id="zoom">
@@ -136,14 +143,16 @@
 <div class="toast" id="toast"></div>
 
 <script>
-// scan order: Position -> FlexNet ID -> Meter ID -> Other
 const FIELDS=[['position','Position'],['fluxId','FlexNet ID'],['meterId','Meter ID'],['other','Other']];
 const KEYS=FIELDS.map(f=>f[0]);
 const blank=()=>({position:'',fluxId:'',meterId:'',other:''});
 let rooms={'Room One':Array(10).fill(0).map(blank)};
 let order=['Room One'];
-let room='Room One',pos=0,activeField='position',editing=null,qr=null,scanning=false,lastScan={t:0,v:''};
+let room='Room One',pos=0,activeField='position',editing=null,qr=null,scanning=false;
 let autoAdvance=true, audioCtx=null;
+let lockValue='', paused=false, lastScan={t:0,v:''};
+
+function fmts(){const F=(typeof Html5QrcodeSupportedFormats!=='undefined')?Html5QrcodeSupportedFormats:null;return F?[F.CODE_39,F.CODE_128,F.CODE_93,F.ITF,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.QR_CODE]:undefined;}
 
 function load(){try{const s=localStorage.getItem('meterInv3');if(s){const o=JSON.parse(s);rooms=o.rooms;order=o.order||Object.keys(rooms);room=order[0];}}catch(e){}}
 function save(){try{localStorage.setItem('meterInv3',JSON.stringify({rooms,order}))}catch(e){}}
@@ -155,19 +164,19 @@ function meterExists(val){let hit=false;order.forEach(rm=>rooms[rm].forEach((r,i
 
 function renderTabs(){
   const c=document.getElementById('tabs');c.innerHTML='';
-  order.forEach(r=>{const b=document.createElement('button');b.className='tab '+(r===room?'on':'off');b.textContent=r;b.onclick=()=>{room=r;pos=0;activeField='position';render()};c.appendChild(b)});
+  order.forEach(r=>{const b=document.createElement('button');b.className='tab '+(r===room?'on':'off');b.textContent=r;b.onclick=()=>{room=r;pos=0;activeField='position';lockValue='';render()};c.appendChild(b)});
   const i=document.createElement('input');i.className='rin';i.placeholder='New room…';i.id='newRoom';
   i.onkeydown=e=>{if(e.key==='Enter')addRoom()};
   const a=document.createElement('button');a.className='radd';a.textContent='+';a.onclick=addRoom;
   c.appendChild(i);c.appendChild(a);
 }
-function addRoom(){const i=document.getElementById('newRoom');const n=(i.value||'').trim();if(!n)return;if(rooms[n]){toast('Room already exists','#b45309');return;}rooms[n]=Array(10).fill(0).map(blank);order.push(n);room=n;pos=0;activeField='position';save();render()}
+function addRoom(){const i=document.getElementById('newRoom');const n=(i.value||'').trim();if(!n)return;if(rooms[n]){toast('Room already exists','#b45309');return;}rooms[n]=Array(10).fill(0).map(blank);order.push(n);room=n;pos=0;activeField='position';lockValue='';save();render()}
 function renameRoom(){const n=(prompt('Rename "'+room+'" to:',room)||'').trim();if(!n||n===room)return;if(rooms[n]){toast('That name is taken','#b45309');return;}rooms[n]=rooms[room];delete rooms[room];order=order.map(r=>r===room?n:r);room=n;save();render();}
-function deleteRoom(){if(order.length<=1){toast('Keep at least one room','#b45309');return;}if(!confirm('Delete "'+room+'" and all its data?'))return;delete rooms[room];order=order.filter(r=>r!==room);room=order[0];pos=0;activeField='position';save();render();}
+function deleteRoom(){if(order.length<=1){toast('Keep at least one room','#b45309');return;}if(!confirm('Delete "'+room+'" and all its data?'))return;delete rooms[room];order=order.filter(r=>r!==room);room=order[0];pos=0;activeField='position';lockValue='';save();render();}
 
 function renderFieldRow(){
   const c=document.getElementById('fieldRow');c.innerHTML='';
-  FIELDS.forEach(([k,l])=>{const b=document.createElement('button');b.className='fbtn'+(k===activeField?' sel':'');b.textContent=l;b.onclick=()=>{activeField=k;render()};c.appendChild(b)});
+  FIELDS.forEach(([k,l])=>{const b=document.createElement('button');b.className='fbtn'+(k===activeField?' sel':'');b.textContent=l;b.onclick=()=>{activeField=k;lockValue='';render()};c.appendChild(b)});
   const idx=KEYS.indexOf(activeField);
   document.getElementById('fieldNow').textContent=FIELDS[idx][1];
   document.getElementById('seq').textContent=`Step ${idx+1} of 4  •  ${FIELDS.map(f=>f[1]).join(' → ')}`;
@@ -194,7 +203,7 @@ function renderTable(){
   rooms[room].forEach((r,i)=>{const tr=document.createElement('tr');if(i===pos)tr.className='cur';
     tr.innerHTML=`<td>${r.position||'—'}</td><td>${r.fluxId||'—'}</td><td>${r.meterId||'—'}</td><td>${r.other||'—'}</td><td class="del">✕</td>`;
     tr.querySelector('.del').onclick=e=>{e.stopPropagation();if(rooms[room].length>1){rooms[room].splice(i,1);if(pos>=rooms[room].length)pos=rooms[room].length-1;}else{rooms[room][0]=blank();}save();render()};
-    tr.onclick=e=>{if(!e.target.classList.contains('del')){pos=i;activeField='position';render()}};
+    tr.onclick=e=>{if(!e.target.classList.contains('del')){pos=i;activeField='position';lockValue='';render()}};
     tb.appendChild(tr)});
 }
 function render(){
@@ -210,44 +219,43 @@ function render(){
 
 function advanceField(){
   const idx=KEYS.indexOf(activeField);
-  if(idx<KEYS.length-1){
-    activeField=KEYS[idx+1];
-  }else{
-    // finished Other -> go to next line at Position (add a line if at the end)
-    activeField='position';
-    if(pos<rooms[room].length-1)pos++;
-    else{rooms[room].push(blank());pos=rooms[room].length-1;}
-  }
+  if(idx<KEYS.length-1){activeField=KEYS[idx+1];}
+  else{activeField='position';if(pos<rooms[room].length-1)pos++;else{rooms[room].push(blank());pos=rooms[room].length-1;}}
   render();
 }
-function nextLine(){activeField='position';if(pos<rooms[room].length-1)pos++;else{rooms[room].push(blank());pos=rooms[room].length-1;}save();render();}
+function nextLine(){activeField='position';lockValue='';if(pos<rooms[room].length-1)pos++;else{rooms[room].push(blank());pos=rooms[room].length-1;}save();render();}
 
 function fillScan(text){
+  if(!text)return;
+  if(scanning&&paused)return;               // brief cooldown after a live-camera read
+  if(text===lockValue)return;               // same barcode still in view -> ignore
   const now=Date.now();
-  if(text===lastScan.v&&now-lastScan.t<2500)return;
+  if(text===lastScan.v&&now-lastScan.t<700)return; // flicker guard
   lastScan={t:now,v:text};
+  lockValue=text;
   if(activeField==='meterId'&&meterExists(text)){toast('⚠ Meter already scanned: '+text,'#b45309');}
   else{toast('✓ '+text);}
   rooms[room][pos][activeField]=text;
   save();beep();
   if(navigator.vibrate)navigator.vibrate(60);
+  if(scanning){paused=true;setTimeout(()=>{paused=false},1200);}
   if(autoAdvance)advanceField();else render();
 }
 
 async function startCam(){
   const btn=document.getElementById('startBtn');
-  if(scanning){await qr.stop();scanning=false;btn.textContent='▶ Start Camera';document.getElementById('zoomWrap').style.display='none';return;}
+  if(scanning){await qr.stop();scanning=false;btn.textContent='▶ Live Camera';document.getElementById('zoomWrap').style.display='none';return;}
   if(typeof Html5Qrcode==='undefined'){toast('Scanner lib not loaded','#b45309');return;}
-  const F=(typeof Html5QrcodeSupportedFormats!=='undefined')?Html5QrcodeSupportedFormats:null;
-  const formats=F?[F.CODE_39,F.CODE_128,F.CODE_93,F.ITF,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.QR_CODE]:undefined;
-  qr=qr||new Html5Qrcode('reader',{formatsToSupport:formats,experimentalFeatures:{useBarCodeDetectorIfSupported:true}});
+  qr=qr||new Html5Qrcode('reader',{formatsToSupport:fmts(),experimentalFeatures:{useBarCodeDetectorIfSupported:true}});
   try{
     await qr.start(
       {facingMode:'environment'},
-      {fps:15,qrbox:undefined,videoConstraints:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}},
+      {fps:15,
+       qrbox:(vw,vh)=>{const w=Math.min(300,vw-24);return {width:w,height:Math.round(w*0.55)};},
+       videoConstraints:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}},
       d=>fillScan(d.trim())
     );
-    scanning=true;btn.textContent='⏸ Stop Camera';
+    scanning=true;btn.textContent='⏸ Stop';
     try{
       const caps=qr.getRunningTrackCapabilities();
       if(caps&&caps.zoom){
@@ -259,6 +267,19 @@ async function startCam(){
       }
     }catch(e){}
   }catch(e){toast('Camera blocked — needs https + permission','#b45309')}
+}
+
+async function scanPhoto(file){
+  if(!file)return;
+  const fr=new Html5Qrcode('fileReader',{formatsToSupport:fmts()});
+  toast('Reading photo…');
+  try{
+    const res=await fr.scanFileV2(file,false);
+    lockValue=''; // a still shot is a deliberate single read
+    fillScan((res.decodedText||'').trim());
+  }catch(e){
+    toast('No barcode found — get closer, fill the frame, hold level','#b45309');
+  }finally{try{await fr.clear()}catch(e){}}
 }
 
 function exportXlsx(){
@@ -282,14 +303,16 @@ document.addEventListener('keydown',e=>{
 });
 
 document.getElementById('startBtn').onclick=startCam;
+document.getElementById('photoBtn').onclick=()=>document.getElementById('photoInput').click();
+document.getElementById('photoInput').onchange=e=>{scanPhoto(e.target.files[0]);e.target.value='';};
 document.getElementById('renameBtn').onclick=renameRoom;
 document.getElementById('deleteBtn').onclick=deleteRoom;
 document.getElementById('autoAdv').onchange=e=>{autoAdvance=e.target.checked};
-document.getElementById('nextField').onclick=()=>{advanceField()};
+document.getElementById('nextField').onclick=()=>{lockValue='';advanceField()};
 document.getElementById('skipLine').onclick=()=>{nextLine()};
-document.getElementById('prev').onclick=()=>{if(pos>0){pos--;activeField='position';render()}};
-document.getElementById('next').onclick=()=>{if(pos<rooms[room].length-1){pos++;activeField='position';render()}};
-document.getElementById('clrCur').onclick=()=>{rooms[room][pos]=blank();activeField='position';save();render()};
+document.getElementById('prev').onclick=()=>{if(pos>0){pos--;activeField='position';lockValue='';render()}};
+document.getElementById('next').onclick=()=>{if(pos<rooms[room].length-1){pos++;activeField='position';lockValue='';render()}};
+document.getElementById('clrCur').onclick=()=>{rooms[room][pos]=blank();activeField='position';lockValue='';save();render()};
 document.getElementById('addPos').onclick=()=>{rooms[room].push(blank());pos=rooms[room].length-1;activeField='position';save();render()};
 document.getElementById('subPos').onclick=()=>{if(rooms[room].length>1){rooms[room].splice(pos,1);if(pos>=rooms[room].length)pos=rooms[room].length-1;save();render()}else{toast('Need at least one position','#b45309')}};
 document.getElementById('expBtn').onclick=exportXlsx;
