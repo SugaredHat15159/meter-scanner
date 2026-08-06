@@ -121,6 +121,7 @@
       <div class="seq" id="seq"></div>
       <label class="toggle"><input type="checkbox" id="autoAdv" checked> Auto-advance to next box</label>
       <label class="toggle"><input type="checkbox" id="skipOther" checked> Skip "Other"</label>
+      <label class="toggle"><input type="checkbox" id="skipPos"> Skip "Position"</label>
       <label class="toggle"><input type="checkbox" id="autoPos"> Auto-number Position (type prefix, counts up)</label>
       <div class="apRow" id="apRow">
         <input class="pfx" id="posPrefix" placeholder="WB1" autocomplete="off">
@@ -179,14 +180,14 @@ let order=['Room One'];
 let room='Room One',pos=0,activeField='position',editing=null,scanning=false;
 let autoAdvance=true, audioCtx=null;
 let lockValue='', paused=false, lastScan={t:0,v:''};
-let hwMode=false, skipOther=true;
+let hwMode=false, skipOther=true, skipPos=false;
 let autoPos=false, posPrefix='', posStart=1; const posPad=3;
 let stream=null, decodeTimer=null, reader=null, cropCanvas=document.createElement('canvas');
 
 // which fields are in the scan sequence (respects the two toggles)
 function seqKeys(){
   let ks=['position','fluxId','meterId','other'];
-  if(autoPos)ks=ks.filter(k=>k!=='position');
+  if(autoPos||skipPos)ks=ks.filter(k=>k!=='position');
   if(skipOther)ks=ks.filter(k=>k!=='other');
   return ks;
 }
@@ -424,6 +425,7 @@ document.getElementById('renameBtn').onclick=renameRoom;
 document.getElementById('deleteBtn').onclick=deleteRoom;
 document.getElementById('autoAdv').onchange=e=>{autoAdvance=e.target.checked};
 document.getElementById('skipOther').onchange=e=>{skipOther=e.target.checked;if(seqKeys().indexOf(activeField)===-1)activeField=seqKeys()[0];render()};
+document.getElementById('skipPos').onchange=e=>{skipPos=e.target.checked;if(seqKeys().indexOf(activeField)===-1)activeField=seqKeys()[0];render()};
 document.getElementById('autoPos').onchange=e=>{autoPos=e.target.checked;document.getElementById('apRow').style.display=autoPos?'flex':'none';if(autoPos){anchorPos=pos;stampForward();if(seqKeys().indexOf(activeField)===-1)activeField=seqKeys()[0];}render();refocusHw()};
 document.getElementById('posPrefix').oninput=e=>{posPrefix=e.target.value.trim();anchorPos=pos;stampForward();render()};
 document.getElementById('posStart').oninput=e=>{posStart=parseInt(e.target.value,10);if(isNaN(posStart))posStart=1;anchorPos=pos;stampForward();render()};
